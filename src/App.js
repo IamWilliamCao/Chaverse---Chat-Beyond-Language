@@ -1,4 +1,3 @@
-// src/App.js
 import { useState, useEffect, useRef } from 'react';
 import { db, auth } from './firebase';
 import {
@@ -15,7 +14,6 @@ import {
   Timestamp,
   updateDoc,
 } from 'firebase/firestore';
-
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -24,11 +22,10 @@ import {
 } from 'firebase/auth';
 
 function generateCode() {
-  return Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit code
+  return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
 function App() {
-  // Auth states
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
@@ -36,19 +33,18 @@ function App() {
   const [isVerified, setIsVerified] = useState(false);
   const [verificationCodeInput, setVerificationCodeInput] = useState('');
   const [sentCode, setSentCode] = useState(null);
-
-  // Messaging states
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [imageFile, setImageFile] = useState(null);
   const [modalImage, setModalImage] = useState(null);
-
   const [usernamesMap, setUsernamesMap] = useState({});
+  const [isSignup, setIsSignup] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [sendOutLang, setSendOutLang] = useState('en');
+  const [receiveLang, setReceiveLang] = useState('en');
 
   const messagesRef = collection(db, 'messages');
   const usersRef = collection(db, 'users');
-  const verificationRef = doc(db, 'emailVerification', 'codes');
-
   const messagesEndRef = useRef(null);
 
   const toBase64 = (file) =>
@@ -83,14 +79,12 @@ function App() {
 
   useEffect(() => {
     if (!isVerified) return;
-
     const unsubscribe = onSnapshot(messagesRef, (snapshot) => {
       const msgs = snapshot.docs
         .map((doc) => ({ id: doc.id, ...doc.data() }))
         .sort((a, b) => a.timestamp?.seconds - b.timestamp?.seconds);
       setMessages(msgs);
     });
-
     return unsubscribe;
   }, [isVerified]);
 
@@ -114,23 +108,19 @@ function App() {
 
   const sendVerificationCode = async () => {
     if (!user) return;
-
     const code = generateCode();
     setSentCode(code);
-
     const expiry = Timestamp.fromDate(new Date(Date.now() + 10 * 60 * 1000));
     await setDoc(doc(db, 'emailVerification', user.uid), {
       code,
       expiry,
       verified: false,
     });
-
     alert(`Verification code sent (simulated): ${code}`);
   };
 
   const verifyCode = async () => {
     if (!user) return;
-
     const vDoc = await getDoc(doc(db, 'emailVerification', user.uid));
     if (!vDoc.exists()) {
       alert('No code found. Please request a new one.');
@@ -138,7 +128,6 @@ function App() {
     }
 
     const data = vDoc.data();
-
     if (Timestamp.now().seconds > data.expiry.seconds) {
       alert('Code expired. Please request a new one.');
       return;
@@ -164,19 +153,14 @@ function App() {
     const q = query(usersRef, where('username', '==', username.trim()));
     const querySnap = await getDocs(q);
     if (!querySnap.empty) {
-      alert('Username already taken, please choose another.');
+      alert('Username already taken.');
       return;
     }
 
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
-      const uid = cred.user.uid;
-
-      await setDoc(doc(db, 'users', uid), {
-        username: username.trim(),
-      });
-
-      alert('Signup successful! Please verify your email with the code.');
+      await setDoc(doc(db, 'users', cred.user.uid), { username: username.trim() });
+      alert('Signup successful! Please verify your email.');
       sendVerificationCode();
     } catch (err) {
       alert('Signup failed: ' + err.message);
@@ -186,7 +170,7 @@ function App() {
   const handleLogin = async () => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      alert('Login successful! Please verify your email with the code if not verified.');
+      alert('Login successful!');
       sendVerificationCode();
     } catch (err) {
       alert('Login failed: ' + err.message);
@@ -198,34 +182,74 @@ function App() {
   };
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() && !imageFile) return;
+  if (!newMessage.trim() && !imageFile) return;
 
-    let imageDataUrl = null;
-    if (imageFile) {
-      try {
-        imageDataUrl = await toBase64(imageFile);
-      } catch {
-        alert('Image error');
-        return;
+  let translatedText = newMessage.trim();
+  try {
+    // Only translate if the output language is NOT English and there is a message
+    if (sendOutLang !== 'en' && newMessage.trim()) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 sec timeout
+
+      console.log('Translating:', newMessage.trim(), 'to', sendOutLang);
+
+      const res = await fetch('http://127.0.0.1:5001/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: newMessage.trim(),
+          source: 'en',
+          target: sendOutLang,
+        }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        console.error('Translation API error:', res.statusText);
+        alert('Translation failed (server issue). Sending original text.');
+      } else {
+        const data = await res.json();
+        translatedText = data.translatedText;
       }
     }
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      alert('Translation timed out. Sending original message.');
+    } else {
+      alert('Translation failed. Sending original message.');
+    }
+    console.error('Translation error:', err);
+  }
 
-    await addDoc(messagesRef, {
-      uid: user.uid,
-      text: newMessage.trim(),
-      image: imageDataUrl,
-      timestamp: serverTimestamp(),
-    });
+  let imageDataUrl = null;
+  if (imageFile) {
+    try {
+      imageDataUrl = await toBase64(imageFile);
+    } catch {
+      alert('Image error');
+      return;
+    }
+  }
 
-    setNewMessage('');
-    setImageFile(null);
-    document.getElementById('image-input').value = '';
-  };
+  await addDoc(messagesRef, {
+    uid: user.uid,
+    text: translatedText,
+    image: imageDataUrl,
+    timestamp: serverTimestamp(),
+  });
+
+  setNewMessage('');
+  setImageFile(null);
+  document.getElementById('image-input').value = '';
+};
+
 
   if (!user) {
     return (
       <div style={{ padding: 20 }}>
-        <h2>Login / Signup</h2>
+        <h2>{isSignup ? 'Sign Up' : 'Login'}</h2>
         <input
           type="email"
           placeholder="Email"
@@ -240,15 +264,21 @@ function App() {
           onChange={(e) => setPassword(e.target.value)}
           style={{ display: 'block', marginBottom: 10, padding: 8, width: '300px' }}
         />
-        <input
-          type="text"
-          placeholder="Choose a username (cannot change later)"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          style={{ display: 'block', marginBottom: 10, padding: 8, width: '300px' }}
-        />
-        <button onClick={handleLogin} style={{ marginRight: 10 }}>Login</button>
-        <button onClick={handleSignup}>Sign Up</button>
+        {isSignup && (
+          <input
+            type="text"
+            placeholder="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            style={{ display: 'block', marginBottom: 10, padding: 8, width: '300px' }}
+          />
+        )}
+        <button onClick={isSignup ? handleSignup : handleLogin} style={{ marginRight: 10 }}>
+          {isSignup ? 'Sign Up' : 'Login'}
+        </button>
+        <button onClick={() => setIsSignup((prev) => !prev)}>
+          {isSignup ? 'Have an account? Log in' : "Don't have an account? Sign up"}
+        </button>
       </div>
     );
   }
@@ -257,7 +287,6 @@ function App() {
     return (
       <div style={{ padding: 20 }}>
         <h2>Email Verification</h2>
-        <p>We sent a 6-digit code to your email.</p>
         <input
           type="text"
           placeholder="Enter 6-digit code"
@@ -266,9 +295,12 @@ function App() {
           maxLength={6}
           style={{ padding: 8, width: '200px', marginRight: 10 }}
         />
-        <button onClick={verifyCode} style={{ marginRight: 10 }}>Verify</button>
+        <button onClick={verifyCode} style={{ marginRight: 10 }}>
+          Verify
+        </button>
         <button onClick={sendVerificationCode}>Resend Code</button>
-        <br /><br />
+        <br />
+        <br />
         <button onClick={handleLogout}>Logout</button>
       </div>
     );
@@ -278,60 +310,48 @@ function App() {
     <div
       style={{
         display: 'flex',
-        padding: '2rem',
+        flexDirection: 'column',
+        padding: 20,
         fontFamily: 'Arial',
         height: '90vh',
-        gap: '2rem',
-        flexDirection: 'column',
+        gap: '1rem',
       }}
     >
-      <button onClick={handleLogout} style={{ alignSelf: 'flex-end' }}>Logout</button>
+      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <button onClick={handleLogout}>Logout</button>
+        <button onClick={() => setShowProfile(true)}>Profile</button>
+      </div>
+
       <h2>Thread Messages</h2>
+
       <div
         style={{
           flex: 1,
           overflowY: 'auto',
           border: '1px solid #ddd',
-          padding: '0.5rem',
-          marginBottom: '1rem',
-          borderRadius: '4px',
+          padding: '1rem',
           backgroundColor: '#fafafa',
-          resize: 'both',
-          minHeight: '150px',
-          maxHeight: '70vh',
-          overflow: 'auto',
+          borderRadius: '4px',
         }}
       >
-        {messages.length === 0 && <p>No messages yet.</p>}
         {messages.map((msg) => (
           <div key={msg.id} style={{ marginBottom: '1rem' }}>
-            <div style={{ fontSize: '0.9rem', color: '#555' }}>
-              <strong>{usernamesMap[msg.uid] || 'Unknown'}</strong>{' '}
-              <em>{msg.timestamp ? msg.timestamp.toDate().toLocaleString() : 'Sending...'}</em>
-            </div>
+            <strong>{usernamesMap[msg.uid] || 'Unknown'}</strong>{' '}
+            <em>{msg.timestamp?.toDate().toLocaleString() || 'Sending...'}</em>
             <div
               style={{
                 backgroundColor: '#e0e0e0',
                 padding: '0.5rem',
                 borderRadius: '4px',
-                maxWidth: '80%',
-                whiteSpace: 'pre-wrap',
-                wordWrap: 'break-word',
-                overflowWrap: 'break-word',
+                marginTop: '0.5rem',
               }}
             >
-              {msg.text && <div style={{ marginBottom: msg.image ? '0.5rem' : 0 }}>{msg.text}</div>}
+              {msg.text && <div>{msg.text}</div>}
               {msg.image && (
                 <img
                   src={msg.image}
                   alt="uploaded"
-                  style={{
-                    maxWidth: '200px',
-                    maxHeight: '150px',
-                    objectFit: 'cover',
-                    borderRadius: '4px',
-                    cursor: 'zoom-in',
-                  }}
+                  style={{ maxWidth: '200px', maxHeight: '150px', borderRadius: '4px', cursor: 'zoom-in' }}
                   onClick={() => setModalImage(msg.image)}
                 />
               )}
@@ -341,7 +361,22 @@ function App() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* New Message Input */}
+      <div style={{ marginBottom: '1rem' }}>
+        <label>Send Message In: </label>
+        <select value={sendOutLang} onChange={(e) => setSendOutLang(e.target.value)}>
+          <option value="en">English</option>
+          <option value="es">Spanish</option>
+          <option value="fr">French</option>
+          <option value="de">German</option>
+          <option value="zh-CN">Chinese</option>
+          <option value="ja">Japanese</option>
+          <option value="ko">Korean</option>
+          <option value="ar">Arabic</option>
+          <option value="ru">Russian</option>
+          <option value="hi">Hindi</option>
+        </select>
+      </div>
+
       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
         <input
           type="text"
@@ -355,37 +390,14 @@ function App() {
           type="file"
           accept="image/jpeg,image/png"
           id="image-input"
-          onChange={(e) => {
-            const file = e.target.files[0];
-            if (file) {
-              if (file.size > 750000) {
-                alert('Image must be less than 750 KB');
-                e.target.value = null;
-                setImageFile(null);
-                return;
-              }
-              if (!['image/jpeg', 'image/png'].includes(file.type)) {
-                alert('Only JPEG or PNG images are allowed');
-                e.target.value = null;
-                setImageFile(null);
-                return;
-              }
-              setImageFile(file);
-            } else {
-              setImageFile(null);
-            }
-          }}
+          onChange={(e) => setImageFile(e.target.files[0] || null)}
           style={{ flex: '1 1 30%' }}
         />
-        <button
-          onClick={handleSendMessage}
-          style={{ padding: '0.5rem 1rem', flex: '1 1 100px' }}
-        >
+        <button onClick={handleSendMessage} style={{ flex: '1 1 100px' }}>
           Send
         </button>
       </div>
 
-      {/* Image Modal */}
       {modalImage && (
         <div
           onClick={() => setModalImage(null)}
@@ -400,19 +412,41 @@ function App() {
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 9999,
-            cursor: 'zoom-out',
           }}
         >
           <img
             src={modalImage}
             alt="full-size"
-            style={{
-              maxWidth: '90%',
-              maxHeight: '90%',
-              borderRadius: '8px',
-              boxShadow: '0 0 20px rgba(255, 255, 255, 0.3)',
-            }}
+            style={{ maxWidth: '90%', maxHeight: '90%', borderRadius: '8px' }}
           />
+        </div>
+      )}
+
+      {showProfile && (
+        <div
+          onClick={() => setShowProfile(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '8px' }}>
+            <h3>Profile</h3>
+            <p>
+              <strong>Email:</strong> {user.email}
+            </p>
+            <p>
+              <strong>Username:</strong> {username}
+            </p>
+            <button onClick={() => setShowProfile(false)}>Close</button>
+          </div>
         </div>
       )}
     </div>
