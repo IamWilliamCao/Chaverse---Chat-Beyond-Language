@@ -16,25 +16,16 @@ def translate_text():
         return jsonify({'error': 'No text provided'}), 400
 
     try:
-        # First detect the language
-        detected_lang = GoogleTranslator().detect(text)
-        
-        # Skip translation if detected == target
-        if detected_lang == target_lang:
-            return jsonify({
-                'translatedText': text,
-                'detectedSource': detected_lang
-            })
-
-        # Translate
-        translator = GoogleTranslator(source=detected_lang, target=target_lang)
+        # Let GoogleTranslator detect source language automatically
+        translator = GoogleTranslator(source='auto', target=target_lang)
         translated = translator.translate(text)
 
         return jsonify({
             'translatedText': translated,
-            'detectedSource': detected_lang
+            'detectedSource': 'auto'  # You can’t get source lang reliably with deep_translator
         })
     except Exception as e:
+        print(f"[ERROR] Translation failed: {e}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
