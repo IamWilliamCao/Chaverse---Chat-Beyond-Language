@@ -89,11 +89,16 @@ function App() {
   }, [isVerified]);
 
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages]);
+    const timeout = setTimeout(() => {
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+      }
+    }, 50); // small delay ensures stable scroll
 
+    return () => clearTimeout(timeout);
+  }, [messages.length]);
+
+  
   useEffect(() => {
     if (!isVerified) return;
     const unsubscribe = onSnapshot(usersRef, (snapshot) => {

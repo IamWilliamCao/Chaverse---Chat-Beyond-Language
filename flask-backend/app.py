@@ -10,19 +10,29 @@ CORS(app, resources={r"/translate": {"origins": "*"}})
 def translate_text():
     data = request.json
     text = data.get('text')
-    source_lang = data.get('source', 'auto')
     target_lang = data.get('target', 'en')
 
     if not text:
         return jsonify({'error': 'No text provided'}), 400
 
     try:
-        translator = GoogleTranslator(source=source_lang, target=target_lang)
+        # First detect the language
+        detected_lang = GoogleTranslator().detect(text)
+        
+        # Skip translation if detected == target
+        if detected_lang == target_lang:
+            return jsonify({
+                'translatedText': text,
+                'detectedSource': detected_lang
+            })
+
+        # Translate
+        translator = GoogleTranslator(source=detected_lang, target=target_lang)
         translated = translator.translate(text)
-        detected_lang = translator.get_supported_languages(as_dict=True).get(translator.source, 'unknown')
+
         return jsonify({
             'translatedText': translated,
-            'detectedSource': translator.source
+            'detectedSource': detected_lang
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
