@@ -182,96 +182,75 @@ function App() {
   };
 
   const handleSendMessage = async () => {
-  if (!newMessage.trim() && !imageFile) return;
+    if (!newMessage.trim() && !imageFile) return;
 
-  let translatedText = newMessage.trim();
-  try {
-    // Only translate if the output language is NOT English and there is a message
-    if (sendOutLang !== 'en' && newMessage.trim()) {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 sec timeout
+    let translatedText = newMessage.trim();
+    try {
+      if (sendOutLang !== 'en' && newMessage.trim()) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-      console.log('Translating:', newMessage.trim(), 'to', sendOutLang);
+        const res = await fetch('https://wackie-talkie.onrender.com/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: newMessage.trim(),
+            source: 'auto',
+            target: sendOutLang,
+          }),
+          signal: controller.signal,
+        });
 
-      const res = await fetch('https://wackie-talkie.onrender.com/translate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: newMessage.trim(),
-          source: 'en',
-          target: sendOutLang,
-        }),
-        signal: controller.signal,
-      });
-      
-      clearTimeout(timeoutId);
+        clearTimeout(timeoutId);
 
-      if (!res.ok) {
-        console.error('Translation API error:', res.statusText);
-        alert('Translation failed (server issue). Sending original text.');
+        if (!res.ok) {
+          console.error('Translation API error:', res.statusText);
+          alert('Translation failed (server issue). Sending original text.');
+        } else {
+          const data = await res.json();
+          translatedText = data.translatedText;
+          console.log(`Detected Language: ${data.detectedSource || 'unknown'}`);
+        }
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        alert('Translation timed out. Sending original message.');
       } else {
-        const data = await res.json();
-        translatedText = data.translatedText;
+        alert('Translation failed. Sending original message.');
+      }
+      console.error('Translation error:', err);
+    }
+
+    let imageDataUrl = null;
+    if (imageFile) {
+      try {
+        imageDataUrl = await toBase64(imageFile);
+      } catch {
+        alert('Image error');
+        return;
       }
     }
-  } catch (err) {
-    if (err.name === 'AbortError') {
-      alert('Translation timed out. Sending original message.');
-    } else {
-      alert('Translation failed. Sending original message.');
-    }
-    console.error('Translation error:', err);
-  }
 
-  let imageDataUrl = null;
-  if (imageFile) {
-    try {
-      imageDataUrl = await toBase64(imageFile);
-    } catch {
-      alert('Image error');
-      return;
-    }
-  }
+    await addDoc(messagesRef, {
+      uid: user.uid,
+      text: translatedText,
+      image: imageDataUrl,
+      timestamp: serverTimestamp(),
+    });
 
-  await addDoc(messagesRef, {
-    uid: user.uid,
-    text: translatedText,
-    image: imageDataUrl,
-    timestamp: serverTimestamp(),
-  });
-
-  setNewMessage('');
-  setImageFile(null);
-  document.getElementById('image-input').value = '';
-};
-
+    setNewMessage('');
+    setImageFile(null);
+    document.getElementById('image-input').value = '';
+  };
 
   if (!user) {
     return (
       <div style={{ padding: 20 }}>
         <h2>{isSignup ? 'Sign Up' : 'Login'}</h2>
-        <input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          style={{ display: 'block', marginBottom: 10, padding: 8, width: '300px' }}
-        />
-        <input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          style={{ display: 'block', marginBottom: 10, padding: 8, width: '300px' }}
-        />
+        <input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} style={{ display: 'block', marginBottom: 10, padding: 8, width: '300px' }} />
+        <input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} style={{ display: 'block', marginBottom: 10, padding: 8, width: '300px' }} />
         {isSignup && (
-          <input
-            type="text"
-            placeholder="Username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            style={{ display: 'block', marginBottom: 10, padding: 8, width: '300px' }}
-          />
+          <input type="text" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} style={{ display: 'block', marginBottom: 10, padding: 8, width: '300px' }} />
         )}
         <button onClick={isSignup ? handleSignup : handleLogin} style={{ marginRight: 10 }}>
           {isSignup ? 'Sign Up' : 'Login'}
@@ -287,14 +266,7 @@ function App() {
     return (
       <div style={{ padding: 20 }}>
         <h2>Email Verification</h2>
-        <input
-          type="text"
-          placeholder="Enter 6-digit code"
-          value={verificationCodeInput}
-          onChange={(e) => setVerificationCodeInput(e.target.value)}
-          maxLength={6}
-          style={{ padding: 8, width: '200px', marginRight: 10 }}
-        />
+        <input type="text" placeholder="Enter 6-digit code" value={verificationCodeInput} onChange={(e) => setVerificationCodeInput(e.target.value)} maxLength={6} style={{ padding: 8, width: '200px', marginRight: 10 }} />
         <button onClick={verifyCode} style={{ marginRight: 10 }}>
           Verify
         </button>
@@ -307,45 +279,19 @@ function App() {
   }
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        padding: 20,
-        fontFamily: 'Arial',
-        height: '90vh',
-        gap: '1rem',
-      }}
-    >
+    <div style={{ display: 'flex', flexDirection: 'column', padding: 20, fontFamily: 'Arial', height: '90vh', gap: '1rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
         <button onClick={handleLogout}>Logout</button>
         <button onClick={() => setShowProfile(true)}>Profile</button>
       </div>
-
       <h2>Thread Messages</h2>
 
-      <div
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          border: '1px solid #ddd',
-          padding: '1rem',
-          backgroundColor: '#fafafa',
-          borderRadius: '4px',
-        }}
-      >
+      <div style={{ flex: 1, overflowY: 'auto', border: '1px solid #ddd', padding: '1rem', backgroundColor: '#fafafa', borderRadius: '4px' }}>
         {messages.map((msg) => (
           <div key={msg.id} style={{ marginBottom: '1rem' }}>
             <strong>{usernamesMap[msg.uid] || 'Unknown'}</strong>{' '}
             <em>{msg.timestamp?.toDate().toLocaleString() || 'Sending...'}</em>
-            <div
-              style={{
-                backgroundColor: '#e0e0e0',
-                padding: '0.5rem',
-                borderRadius: '4px',
-                marginTop: '0.5rem',
-              }}
-            >
+            <div style={{ backgroundColor: '#e0e0e0', padding: '0.5rem', borderRadius: '4px', marginTop: '0.5rem' }}>
               {msg.text && <div>{msg.text}</div>}
               {msg.image && (
                 <img
@@ -378,73 +324,25 @@ function App() {
       </div>
 
       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-        <input
-          type="text"
-          placeholder="Type your message..."
-          value={newMessage}
-          onChange={(e) => setNewMessage(e.target.value)}
-          style={{ flex: '1 1 60%', padding: '0.5rem' }}
-          onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
-        />
-        <input
-          type="file"
-          accept="image/jpeg,image/png"
-          id="image-input"
-          onChange={(e) => setImageFile(e.target.files[0] || null)}
-          style={{ flex: '1 1 30%' }}
-        />
+        <input type="text" placeholder="Type your message..." value={newMessage} onChange={(e) => setNewMessage(e.target.value)} style={{ flex: '1 1 60%', padding: '0.5rem' }} onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()} />
+        <input type="file" accept="image/jpeg,image/png" id="image-input" onChange={(e) => setImageFile(e.target.files[0] || null)} style={{ flex: '1 1 30%' }} />
         <button onClick={handleSendMessage} style={{ flex: '1 1 100px' }}>
           Send
         </button>
       </div>
 
       {modalImage && (
-        <div
-          onClick={() => setModalImage(null)}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            backgroundColor: 'rgba(0,0,0,0.85)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-          }}
-        >
-          <img
-            src={modalImage}
-            alt="full-size"
-            style={{ maxWidth: '90%', maxHeight: '90%', borderRadius: '8px' }}
-          />
+        <div onClick={() => setModalImage(null)} style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <img src={modalImage} alt="full-size" style={{ maxWidth: '90%', maxHeight: '90%', borderRadius: '8px' }} />
         </div>
       )}
 
       {showProfile && (
-        <div
-          onClick={() => setShowProfile(false)}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            width: '100vw',
-            height: '100vh',
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
+        <div onClick={() => setShowProfile(false)} style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
           <div style={{ backgroundColor: 'white', padding: '2rem', borderRadius: '8px' }}>
             <h3>Profile</h3>
-            <p>
-              <strong>Email:</strong> {user.email}
-            </p>
-            <p>
-              <strong>Username:</strong> {username}
-            </p>
+            <p><strong>Email:</strong> {user.email}</p>
+            <p><strong>Username:</strong> {username}</p>
             <button onClick={() => setShowProfile(false)}>Close</button>
           </div>
         </div>
