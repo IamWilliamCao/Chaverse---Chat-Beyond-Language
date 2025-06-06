@@ -193,7 +193,7 @@ function App() {
 
       console.log('Translating:', newMessage.trim(), 'to', sendOutLang);
 
-      const res = await fetch('http://127.0.0.1:5000/translate', {
+      const res = await fetch('https://wackie-talkie-server.onrender.com/translate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -203,7 +203,7 @@ function App() {
         }),
         signal: controller.signal,
       });
-
+      
       clearTimeout(timeoutId);
 
       if (!res.ok) {
