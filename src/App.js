@@ -336,7 +336,7 @@ useEffect(() => {
       <div style={{ marginBottom: '1rem' }}>
         <label>Send Message In: </label>
         <select value={sendOutLang} onChange={(e) => setSendOutLang(e.target.value)}>
-          <option value="en">English</option>
+          <option value="en-US">English</option>
           <option value="es">Spanish</option>
           <option value="fr">French</option>
           <option value="de">German</option>
