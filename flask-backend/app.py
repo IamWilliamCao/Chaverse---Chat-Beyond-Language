@@ -17,12 +17,10 @@ def translate_text():
         return jsonify({'error': 'No text provided'}), 400
 
     try:
-        translator = GoogleTranslator(source=source_lang, target=target_lang)
-        translated = translator.translate(text)
-        detected_lang = translator.get_supported_languages(as_dict=True).get(translator.source, 'unknown')
+        translated = GoogleTranslator(source=source_lang, target=target_lang).translate(text)
         return jsonify({
             'translatedText': translated,
-            'detectedSource': translator.source
+            'detectedSource': source_lang  # just return what the user selected
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
