@@ -191,7 +191,7 @@ function App() {
 
   let translatedText = newMessage.trim();
   try {
-    if (sendOutLang !== 'en' && newMessage.trim()) {
+    if (newMessage.trim()) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
 
