@@ -187,66 +187,87 @@ function App() {
   };
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() && !imageFile) return;
+  if (!newMessage.trim() && !imageFile) return;
 
-    let translatedText = newMessage.trim();
-    try {
-      if (sendOutLang !== 'en' && newMessage.trim()) {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
+  let translatedText = newMessage.trim();
+  try {
+    if (sendOutLang !== 'en' && newMessage.trim()) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
 
-        const res = await fetch('https://wackie-talkie.onrender.com/translate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            text: newMessage.trim(),
-            source: 'auto',
-            target: sendOutLang,
-          }),
-          signal: controller.signal,
-        });
+      const res = await fetch('https://wackie-talkie.onrender.com/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: newMessage.trim(),
+          source: 'auto',
+          target: sendOutLang,
+        }),
+        signal: controller.signal,
+      });
 
-        clearTimeout(timeoutId);
+      clearTimeout(timeoutId);
 
-        if (!res.ok) {
-          console.error('Translation API error:', res.statusText);
-          alert('Translation failed (server issue). Sending original text.');
-        } else {
-          const data = await res.json();
-          translatedText = data.translatedText;
-          console.log(`Detected Language: ${data.detectedSource || 'unknown'}`);
-        }
-      }
-    } catch (err) {
-      if (err.name === 'AbortError') {
-        alert('Translation timed out. Sending original message.');
+      if (!res.ok) {
+        console.error('Translation API error:', res.statusText);
+        alert('Translation failed (server issue). Sending original text.');
       } else {
-        alert('Translation failed. Sending original message.');
-      }
-      console.error('Translation error:', err);
-    }
-
-    let imageDataUrl = null;
-    if (imageFile) {
-      try {
-        imageDataUrl = await toBase64(imageFile);
-      } catch {
-        alert('Image error');
-        return;
+        const data = await res.json();
+        translatedText = data.translatedText;
+        console.log(`Detected Language: ${data.detectedSource || 'unknown'}`);
       }
     }
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      alert('Translation timed out. Sending original message.');
+    } else {
+      alert('Translation failed. Sending original message.');
+    }
+    console.error('Translation error:', err);
+  }
 
-    await addDoc(messagesRef, {
-      uid: user.uid,
-      text: translatedText,
-      image: imageDataUrl,
-      timestamp: serverTimestamp(),
-    });
+  let imageDataUrl = null;
+  if (imageFile) {
+    try {
+      imageDataUrl = await toBase64(imageFile);
+    } catch {
+      alert('Image error');
+      return;
+    }
+  }
 
-    setNewMessage('');
-    setImageFile(null);
-    document.getElementById('image-input').value = '';
+  await addDoc(messagesRef, {
+    uid: user.uid,
+    text: translatedText,
+    image: imageDataUrl,
+    timestamp: serverTimestamp(),
+  });
+
+  setNewMessage('');
+  setImageFile(null);
+  document.getElementById('image-input').value = '';
+
+  // Scroll manually in case Firestore is slow
+  setTimeout(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, 100);
+};
+
+useEffect(() => {
+  if (!isVerified || messages.length === 0) return;
+
+  // Ensure scroll always sticks to bottom reliably, even with variable message/image load
+  const scrollToBottom = () => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+    }
   };
+
+  const timeout = setTimeout(scrollToBottom, 50);
+  return () => clearTimeout(timeout);
+}, [messages]);
 
   if (!user) {
     return (
