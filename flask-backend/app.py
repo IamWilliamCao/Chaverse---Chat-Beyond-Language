@@ -11,7 +11,7 @@ def translate_text():
     data = request.json
     text = data.get('text')
     source_lang = data.get('source', 'auto')
-    target_lang = data.get('target', 'en')
+    target_lang = data.get('target', 'en-US')
 
     if not text:
         return jsonify({'error': 'No text provided'}), 400
