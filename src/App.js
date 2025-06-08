@@ -41,11 +41,11 @@ function App() {
   const [usernamesMap, setUsernamesMap] = useState({});
   const [isSignup, setIsSignup] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [sendOutLang, setSendOutLang] = useState(() => localStorage.getItem('sendOutLang') || 'en');
-  const [dictationLang, setDictationLang] = useState(() => localStorage.getItem('dictationLang') || 'en-US');
+  const [sendOutLang, setSendOutLang] = useState('en');
   const [receiveLang, setReceiveLang] = useState('en');
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
+  const [dictationLang, setDictationLang] = useState('en-US');
 
   useEffect(() => {
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
@@ -57,7 +57,7 @@ function App() {
     const recognition = new SpeechRecognition();
     recognition.continuous = false;
     recognition.interimResults = false;
-    
+
     recognition.lang = dictationLang;
 
     recognition.onresult = (event) => {
@@ -83,14 +83,6 @@ function App() {
       reader.onload = () => resolve(reader.result);
       reader.onerror = (error) => reject(error);
     });
-
-  useEffect(() => {
-    localStorage.setItem('sendOutLang', sendOutLang);
-  }, [sendOutLang]);
-
-  useEffect(() => {
-    localStorage.setItem('dictationLang', dictationLang);
-  }, [dictationLang]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (usr) => {
