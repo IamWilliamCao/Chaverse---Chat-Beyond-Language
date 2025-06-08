@@ -36,12 +36,41 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [imageFile, setImageFile] = useState(null);
+  const [showOriginal, setShowOriginal] = useState({});
   const [modalImage, setModalImage] = useState(null);
   const [usernamesMap, setUsernamesMap] = useState({});
   const [isSignup, setIsSignup] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [sendOutLang, setSendOutLang] = useState('en');
+  const [sendOutLang, setSendOutLang] = useState(() => localStorage.getItem('sendOutLang') || 'en');
+  const [dictationLang, setDictationLang] = useState(() => localStorage.getItem('dictationLang') || 'en-US');
   const [receiveLang, setReceiveLang] = useState('en');
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
+
+  useEffect(() => {
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      alert('Speech recognition not supported in this browser.');
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    
+    recognition.lang = dictationLang;
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      setNewMessage((prev) => `${prev} ${transcript}`.trim());
+    };
+
+    recognition.onend = () => setIsListening(false);
+
+    recognitionRef.current = recognition;
+  }, [dictationLang]);
+
+
 
   const messagesRef = collection(db, 'messages');
   const usersRef = collection(db, 'users');
@@ -54,6 +83,14 @@ function App() {
       reader.onload = () => resolve(reader.result);
       reader.onerror = (error) => reject(error);
     });
+
+  useEffect(() => {
+    localStorage.setItem('sendOutLang', sendOutLang);
+  }, [sendOutLang]);
+
+  useEffect(() => {
+    localStorage.setItem('dictationLang', dictationLang);
+  }, [dictationLang]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (usr) => {
@@ -239,6 +276,7 @@ function App() {
   await addDoc(messagesRef, {
     uid: user.uid,
     text: translatedText,
+    originalText: newMessage.trim(),
     image: imageDataUrl,
     timestamp: serverTimestamp(),
   });
@@ -317,8 +355,32 @@ useEffect(() => {
           <div key={msg.id} style={{ marginBottom: '1rem' }}>
             <strong>{usernamesMap[msg.uid] || 'Unknown'}</strong>{' '}
             <em>{msg.timestamp?.toDate().toLocaleString() || 'Sending...'}</em>
-            <div style={{ backgroundColor: '#e0e0e0', padding: '0.5rem', borderRadius: '4px', marginTop: '0.5rem' }}>
-              {msg.text && <div>{msg.text}</div>}
+            <div style={{ backgroundColor: '#e0e0e0', padding: '0.5rem', borderRadius: '4px', marginTop: '0.5rem', position: 'relative' }}>
+              {msg.text && (
+                <div>
+                  {showOriginal[msg.id] ? msg.originalText || msg.text : msg.text}
+                  {msg.originalText && (
+                    <button
+                      onClick={() =>
+                        setShowOriginal((prev) => ({
+                          ...prev,
+                          [msg.id]: !prev[msg.id],
+                        }))
+                      }
+                      style={{
+                        border: 'none',
+                        background: 'none',
+                        cursor: 'pointer',
+                        marginLeft: 8,
+                      }}
+                      title="Toggle original message"
+                    >
+                      🔁
+                    </button>
+                  )}
+                </div>
+              )}
+
               {msg.image && (
                 <img
                   src={msg.image}
@@ -349,19 +411,76 @@ useEffect(() => {
         </select>
       </div>
 
-      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-        <input type="text" placeholder="Type your message..." value={newMessage} onChange={(e) => setNewMessage(e.target.value)} style={{ flex: '1 1 60%', padding: '0.5rem' }} onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()} />
-        <input type="file" accept="image/jpeg,image/png" id="image-input" onChange={(e) => setImageFile(e.target.files[0] || null)} style={{ flex: '1 1 30%' }} />
-        <button onClick={handleSendMessage} style={{ flex: '1 1 100px' }}>
-          Send
-        </button>
-      </div>
+<div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+  <textarea
+    placeholder="Type your message..."
+    value={newMessage}
+    onChange={(e) => setNewMessage(e.target.value)}
+    style={{
+      flex: '1 1 60%',
+      padding: '0.5rem',
+      resize: 'vertical',
+      minHeight: '2.5rem',
+      maxHeight: '150px',
+      lineHeight: '1.5',
+      overflowY: 'auto',
+    }}
+    onKeyDown={(e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSendMessage();
+      }
+    }}
+  />
 
-      {modalImage && (
-        <div onClick={() => setModalImage(null)} style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-          <img src={modalImage} alt="full-size" style={{ maxWidth: '90%', maxHeight: '90%', borderRadius: '8px' }} />
-        </div>
-      )}
+  <input
+    type="file"
+    accept="image/jpeg,image/png"
+    id="image-input"
+    onChange={(e) => setImageFile(e.target.files[0] || null)}
+    style={{ flex: '1 1 30%' }}
+  />
+
+  <button onClick={handleSendMessage} style={{ flex: '1 1 100px' }}>
+    Send
+  </button>
+
+<div style={{ marginBottom: '1rem' }}>
+  <label>Dictation Input Language: </label>
+  <select value={dictationLang} onChange={(e) => setDictationLang(e.target.value)}>
+    <option value="en-US">English</option>
+    <option value="zh-CN">Chinese (Mandarin)</option>
+    <option value="es-ES">Spanish</option>
+    <option value="fr-FR">French</option>
+    <option value="de-DE">German</option>
+    <option value="ja-JP">Japanese</option>
+    <option value="ko-KR">Korean</option>
+    <option value="ar-SA">Arabic</option>
+    <option value="ru-RU">Russian</option>
+    <option value="hi-IN">Hindi</option>
+  </select>
+</div>
+
+  <button
+    onClick={() => {
+      if (recognitionRef.current && !isListening) {
+        setIsListening(true);
+        recognitionRef.current.start();
+      } else if (recognitionRef.current && isListening) {
+        recognitionRef.current.stop();
+      }
+    }}
+    style={{
+      flex: '1 1 100px',
+      backgroundColor: isListening ? '#d9534f' : '#5bc0de',
+      color: 'white',
+    }}
+  >
+    {isListening ? 'Stop' : 'Dictate'}
+  </button>
+</div>
+
+
 
       {showProfile && (
         <div onClick={() => setShowProfile(false)} style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
@@ -373,7 +492,11 @@ useEffect(() => {
           </div>
         </div>
       )}
+
+      
     </div>
+
+    
   );
 }
 
