@@ -222,7 +222,7 @@ function App() {
   try {
     if (newMessage.trim()) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
 
       const res = await fetch('https://wackie-talkie.onrender.com/translate', {
         method: 'POST',
