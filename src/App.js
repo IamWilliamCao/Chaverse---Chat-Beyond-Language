@@ -19,11 +19,9 @@ import {
   signInWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
+  sendEmailVerification,
 } from 'firebase/auth';
 
-function generateCode() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
 
 function App() {
   const [email, setEmail] = useState('');
@@ -31,8 +29,6 @@ function App() {
   const [username, setUsername] = useState('');
   const [user, setUser] = useState(null);
   const [isVerified, setIsVerified] = useState(false);
-  const [verificationCodeInput, setVerificationCodeInput] = useState('');
-  const [sentCode, setSentCode] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [imageFile, setImageFile] = useState(null);
@@ -46,6 +42,15 @@ function App() {
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
   const [dictationLang, setDictationLang] = useState('en-US');
+
+  const sendVerificationEmail = async (user) => {
+    try {
+      await sendEmailVerification(user);
+      alert('Verification email sent! Please check your inbox.');
+    } catch (error) {
+      alert('Failed to send verification email: ' + error.message);
+    }
+  };
 
   useEffect(() => {
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
@@ -87,9 +92,9 @@ function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (usr) => {
       if (usr) {
+        await usr.reload(); // refresh user info
         setUser(usr);
-        const vDoc = await getDoc(doc(db, 'emailVerification', usr.uid));
-        setIsVerified(vDoc.exists() && vDoc.data().verified === true);
+        setIsVerified(usr.emailVerified);
 
         const userDoc = await getDoc(doc(db, 'users', usr.uid));
         if (userDoc.exists()) {
@@ -98,8 +103,6 @@ function App() {
       } else {
         setUser(null);
         setIsVerified(false);
-        setSentCode(null);
-        setVerificationCodeInput('');
         setUsername('');
       }
     });
@@ -140,44 +143,6 @@ function App() {
     return unsubscribe;
   }, [isVerified]);
 
-  const sendVerificationCode = async () => {
-    if (!user) return;
-    const code = generateCode();
-    setSentCode(code);
-    const expiry = Timestamp.fromDate(new Date(Date.now() + 10 * 60 * 1000));
-    await setDoc(doc(db, 'emailVerification', user.uid), {
-      code,
-      expiry,
-      verified: false,
-    });
-    alert(`Verification code sent (simulated): ${code}`);
-  };
-
-  const verifyCode = async () => {
-    if (!user) return;
-    const vDoc = await getDoc(doc(db, 'emailVerification', user.uid));
-    if (!vDoc.exists()) {
-      alert('No code found. Please request a new one.');
-      return;
-    }
-
-    const data = vDoc.data();
-    if (Timestamp.now().seconds > data.expiry.seconds) {
-      alert('Code expired. Please request a new one.');
-      return;
-    }
-
-    if (verificationCodeInput === data.code) {
-      await updateDoc(doc(db, 'emailVerification', user.uid), {
-        verified: true,
-      });
-      setIsVerified(true);
-      alert('Email verified! You can now access the thread.');
-    } else {
-      alert('Incorrect code. Please try again.');
-    }
-  };
-
   const handleSignup = async () => {
     if (!username.trim()) {
       alert('Please enter a username.');
@@ -194,8 +159,10 @@ function App() {
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       await setDoc(doc(db, 'users', cred.user.uid), { username: username.trim() });
+
+      await sendEmailVerification(cred.user); 
+
       alert('Signup successful! Please verify your email.');
-      sendVerificationCode();
     } catch (err) {
       alert('Signup failed: ' + err.message);
     }
@@ -203,9 +170,10 @@ function App() {
 
   const handleLogin = async () => {
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      setUser(cred.user);
+      setIsVerified(cred.user.emailVerified);
       alert('Login successful!');
-      sendVerificationCode();
     } catch (err) {
       alert('Login failed: ' + err.message);
     }
@@ -321,12 +289,33 @@ useEffect(() => {
   if (!isVerified) {
     return (
       <div style={{ padding: 20 }}>
-        <h2>Email Verification</h2>
-        <input type="text" placeholder="Enter 6-digit code" value={verificationCodeInput} onChange={(e) => setVerificationCodeInput(e.target.value)} maxLength={6} style={{ padding: 8, width: '200px', marginRight: 10 }} />
-        <button onClick={verifyCode} style={{ marginRight: 10 }}>
-          Verify
+        <h2>Please verify your email</h2>
+        <p>
+          A verification link has been sent to your email address.
+          Please check your inbox and click the link to verify your account.
+        </p>
+        <button onClick={() => sendVerificationEmail(user)}>
+          Resend verification email
         </button>
-        <button onClick={sendVerificationCode}>Resend Code</button>
+
+        {/* Add refresh button here */}
+        <button
+          style={{ marginLeft: '10px' }}
+          onClick={async () => {
+            if (user) {
+              await user.reload(); // Refresh user info from Firebase
+              setIsVerified(user.emailVerified);
+              if (user.emailVerified) {
+                alert('Your email is now verified! You can access the app.');
+              } else {
+                alert('Email not verified yet. Please check your inbox.');
+              }
+            }
+          }}
+        >
+          Refresh Verification Status
+        </button>
+
         <br />
         <br />
         <button onClick={handleLogout}>Logout</button>
