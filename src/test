@@ -421,7 +421,7 @@ function App() {
       reader.onerror = (error) => reject(error);
   });
 
-  if (!user) {
+  if (!user) {  if (!user) {
     return (
       <div className="auth-container">
 
@@ -488,7 +488,7 @@ function App() {
       </div>
     );
   }
-  
+
   if (!isVerified) {
     return (
       <div style={{ padding: 20 }}>
