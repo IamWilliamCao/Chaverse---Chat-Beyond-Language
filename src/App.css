@@ -338,3 +338,26 @@ button:active {
   box-shadow: 0 0 15px rgba(106,90,205,0.6);
   color: white;
 }
+
+/* Room select screen */
+.room-select-container {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  align-items: center;
+  height: 120vh;
+  flex-wrap: wrap;
+}
+
+.room-option {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.room-option button {
+  width: clamp(350px, 15vw, 420px);
+  height: clamp(380px, 12vh, 420px);
+  font-size: clamp(2.9rem, 1vw, 5.1rem);
+  border-radius: 12px;
+}

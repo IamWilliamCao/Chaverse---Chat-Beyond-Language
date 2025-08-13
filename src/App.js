@@ -18,6 +18,7 @@ import {
   arrayUnion,
   orderBy,
   limit,
+  deleteDoc,
 } from 'firebase/firestore';
 
 import {
@@ -103,6 +104,21 @@ function App() {
         const userDoc = await getDoc(doc(db, 'users', usr.uid));
         if (userDoc.exists()) {
           setUsername(userDoc.data().username);
+            const data = userDoc.data();
+            if (data.activeRoomId) {
+              const roomRef = doc(db, 'rooms', data.activeRoomId);
+              const roomSnap = await getDoc(roomRef);
+              if (roomSnap.exists() && (roomSnap.data().participants || []).includes(usr.uid)) {
+                setActiveRoom({
+                  id: roomSnap.id,
+                  name: roomSnap.data().name,
+                  code: roomSnap.data().code
+                });
+              } else {
+                // Clear saved room if it no longer exists or user is not in it
+                await updateDoc(doc(db, 'users', usr.uid), { activeRoomId: null });
+              }
+            }
         }
       } else {
         setUser(null);
@@ -290,6 +306,9 @@ function App() {
       });
 
       setActiveRoom({ id: roomRef.id, name, code: newCode });
+      await updateDoc(doc(db, 'users', user.uid), {
+        activeRoomId: roomRef.id
+      });
       setShowRoomCreateForm(false);
       setRoomNameInput('');
     } catch (err) {
@@ -314,6 +333,9 @@ function App() {
       await updateDoc(roomRef, { participants: arrayUnion(user.uid) });
 
       setActiveRoom({ id: roomDoc.id, name: roomData.name, code: roomData.code });
+      await updateDoc(doc(db, 'users', user.uid), {
+        activeRoomId: roomDoc.id
+      });
       setShowRoomJoinForm(false);
       setRoomCodeInput('');
     } catch (err) {
@@ -336,6 +358,14 @@ function App() {
       await updateDoc(roomRef, { participants: updated });
       setActiveRoom(null);
       setMessages([]);
+
+      if (updated.length === 0) {
+        await deleteDoc(roomRef);
+      }
+
+      await updateDoc(doc(db, 'users', user.uid), {
+        activeRoomId: null
+      });
     } catch (err) {
       console.error('Leave room error', err);
       setActiveRoom(null);
@@ -571,17 +601,15 @@ function App() {
           <button onClick={() => setShowProfile(true)}>Profile</button>
         </div>
 
-        <h2>Thread Messages</h2>
-
-        <div style={{ display: 'flex', gap: 20, justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
-          <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-            <button style={{ width: 220, height: 120, fontSize: '1.1rem' }} onClick={() => { setShowRoomCreateForm(true); setShowRoomJoinForm(false); }}>
+        <div className="room-select-container">
+          <div className="room-option">
+            <button onClick={() => { setShowRoomCreateForm(true); setShowRoomJoinForm(false); }}>
               Create Room
             </button>
           </div>
 
-          <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-            <button style={{ width: 220, height: 120, fontSize: '1.1rem' }} onClick={() => { setShowRoomJoinForm(true); setShowRoomCreateForm(false); }}>
+          <div className="room-option">
+            <button onClick={() => { setShowRoomJoinForm(true); setShowRoomCreateForm(false); }}>
               Join Room
             </button>
           </div>
