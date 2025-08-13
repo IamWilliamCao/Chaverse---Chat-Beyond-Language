@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/wackie-talkie/static/css/main.2e734476.css",
+    "main.js": "/wackie-talkie/static/js/main.40b8852c.js",
+    "static/js/453.8ac44164.chunk.js": "/wackie-talkie/static/js/453.8ac44164.chunk.js",
+    "index.html": "/wackie-talkie/index.html",
+    "main.2e734476.css.map": "/wackie-talkie/static/css/main.2e734476.css.map",
+    "main.40b8852c.js.map": "/wackie-talkie/static/js/main.40b8852c.js.map",
+    "453.8ac44164.chunk.js.map": "/wackie-talkie/static/js/453.8ac44164.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.2e734476.css",
+    "static/js/main.40b8852c.js"
+  ]
+}
