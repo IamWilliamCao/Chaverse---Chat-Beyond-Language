@@ -104,6 +104,9 @@ function App() {
         const userDoc = await getDoc(doc(db, 'users', usr.uid));
         if (userDoc.exists()) {
           setUsername(userDoc.data().username);
+            if (userDoc.data().dictationLang) {
+              setDictationLang(userDoc.data().dictationLang);
+            }
             const data = userDoc.data();
             if (data.activeRoomId) {
               const roomRef = doc(db, 'rooms', data.activeRoomId);
@@ -637,6 +640,27 @@ function App() {
               <h3>Profile</h3>
               <p><strong>Email:</strong> {user.email}</p>
               <p><strong>Username:</strong> {username}</p>
+
+              <label>
+                Dictation Language:
+                <select
+                  value={dictationLang}
+                  onChange={async (e) => {
+                    const newLang = e.target.value;
+                    setDictationLang(newLang);
+                    await updateDoc(doc(db, 'users', user.uid), { dictationLang: newLang });
+                  }}
+                >
+                  <option value="en-US">English (US)</option>
+                  <option value="es-ES">Spanish (Spain)</option>
+                  <option value="fr-FR">French</option>
+                  <option value="de-DE">German</option>
+                  <option value="zh-CN">Chinese (Mandarin)</option>
+                  <option value="ja-JP">Japanese</option>
+                  <option value="ko-KR">Korean</option>
+                </select>
+              </label>
+
               <button onClick={() => setShowProfile(false)}>Close</button>
             </div>
           </div>
@@ -772,6 +796,27 @@ function App() {
             <h3>Profile</h3>
             <p><strong>Email:</strong> {user.email}</p>
             <p><strong>Username:</strong> {username}</p>
+
+            <label>
+                Dictation Language:
+                <select
+                  value={dictationLang}
+                  onChange={async (e) => {
+                    const newLang = e.target.value;
+                    setDictationLang(newLang);
+                    await updateDoc(doc(db, 'users', user.uid), { dictationLang: newLang });
+                  }}
+                >
+                  <option value="en-US">English (US)</option>
+                  <option value="es-ES">Spanish (Spain)</option>
+                  <option value="fr-FR">French</option>
+                  <option value="de-DE">German</option>
+                  <option value="zh-CN">Chinese (Mandarin)</option>
+                  <option value="ja-JP">Japanese</option>
+                  <option value="ko-KR">Korean</option>
+                </select>
+              </label>
+
             <button onClick={() => setShowProfile(false)}>Close</button>
           </div>
         </div>
